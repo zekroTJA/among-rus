@@ -2,11 +2,19 @@ use super::packets;
 use crate::objects;
 
 use async_std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
-use std::{convert::TryFrom, error::Error, io};
+use std::{collections::HashMap, convert::TryFrom, error::Error, io};
 
+/// "Placeholder" struct for whatever else
+/// might be useful in there later. :^)
+pub struct Client {}
+
+/// The main UDP server to maintain connections
+// to the clients.
 pub struct Server {
     socket: UdpSocket,
     buf: Vec<u8>,
+
+    connected_clients: HashMap<String, Client>,
 }
 
 impl Server {
@@ -14,19 +22,24 @@ impl Server {
         let socket = UdpSocket::bind(&addr).await?;
         println!("Socket listening on addr {}...", addr);
 
-        let buf = vec![0u8; 1024 * 16];
+        let buf = vec![0u8; 1024 * 4];
+        let connected_clients: HashMap<String, Client> = HashMap::new();
 
-        Ok(Server { socket, buf })
+        Ok(Server {
+            socket,
+            buf,
+            connected_clients,
+        })
     }
 
     pub async fn listen_blocking(&mut self) {
         loop {
-            self.handle_message().await;
+            self.handle_message().await; // TODO: Handle result
         }
     }
 
     async fn handle_message(&mut self) -> io::Result<()> {
-        let (recv, peer) = self.socket.recv_from(&mut self.buf).await?;
+        let (_, peer) = self.socket.recv_from(&mut self.buf).await?;
 
         match packets::parse_packet(&self.buf) {
             Ok((typ, packet)) => {
@@ -36,10 +49,10 @@ impl Server {
                     packets::PacketType::HELLO => {
                         let packet = packet.downcast::<packets::HelloPacket>().unwrap();
                         self.send_ack(&peer, packet.nonce, 128).await?;
+                        self.connected_clients.insert(peer.to_string(), Client {});
                     }
                     packets::PacketType::RELIABLE => {
                         let packet = packet.downcast::<packets::ReliablePacket>().unwrap();
-                        // println!("{:#?}", packet.payload);
                         self.send_ack(&peer, packet.nonce, 128).await?;
                         match Self::parse_object(&packet) {
                             Ok(_) => (),

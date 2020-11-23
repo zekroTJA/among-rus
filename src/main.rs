@@ -1,3 +1,4 @@
+mod bufpool;
 mod net;
 mod objects;
 mod util;

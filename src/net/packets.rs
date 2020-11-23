@@ -88,6 +88,22 @@ pub struct DisconnectPacket {
     pub reason: Message,
 }
 
+impl DisconnectPacket {
+    fn parse(buf: &Vec<u8>) -> Result<DisconnectPacket, Box<dyn Error>> {
+        check_buf_len(buf, 4)?;
+
+        let (_, reason) = match Message::parse(buf, 2) {
+            Some(v) => v,
+            None => return Err("invalid message".into()),
+        };
+
+        Ok(DisconnectPacket {
+            some_fuckery: buf[1],
+            reason,
+        })
+    }
+}
+
 pub struct AckPacket {
     pub nonce: u16,
     pub missing_packets: u8,
