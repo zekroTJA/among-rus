@@ -1,10 +1,5 @@
-mod bufpool;
-mod net;
-mod objects;
-mod util;
-
+use among_rus::net::udp;
 use async_std::task;
-use net::udp;
 use std::io;
 
 async fn async_main() -> io::Result<()> {
