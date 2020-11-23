@@ -1,22 +1,21 @@
-use crate::message::Message;
+use super::message::Message;
+use crate::util::buffer::*;
+use crate::util::conversion::*;
 use std::{
-    convert::{
-        TryFrom,
-        TryInto,
-    },
     any::Any,
+    convert::{TryFrom, TryInto},
     error::Error,
 };
 
 #[derive(Debug)]
 pub enum PacketType {
-    NORMAL      = 0x00,
-    RELIABLE    = 0x01,
-    HELLO       = 0x08,
-    DISCONNECT  = 0x09,
-    ACK         = 0x0a,
-    FRAGMENT    = 0x0b, // not implemented yet,
-    PING        = 0x0c,
+    NORMAL = 0x00,
+    RELIABLE = 0x01,
+    HELLO = 0x08,
+    DISCONNECT = 0x09,
+    ACK = 0x0a,
+    FRAGMENT = 0x0b, // not implemented yet,
+    PING = 0x0c,
 }
 
 impl TryFrom<u8> for PacketType {
@@ -47,14 +46,12 @@ pub struct ReliablePacket {
 
 impl ReliablePacket {
     fn parse(buf: &Vec<u8>) -> Result<ReliablePacket, Box<dyn Error>> {
-        if buf.len() < 5 {
-            return Err("invalid packet length".into());
-        }
+        check_buf_len(buf, 5)?;
 
         let nonce = vec_to_nonce_unsafe(buf, 1);
-        let payload = read_hazel_messages_until_end(buf, 1+4);
+        let payload = read_hazel_messages_until_end(buf, 1 + 2);
 
-        Ok(ReliablePacket{nonce, payload})
+        Ok(ReliablePacket { nonce, payload })
     }
 }
 
@@ -67,19 +64,22 @@ pub struct HelloPacket {
 
 impl HelloPacket {
     fn parse(buf: &Vec<u8>) -> Result<HelloPacket, Box<dyn Error>> {
-        if buf.len() < 9 {
-            return Err("invalid packet length".into());
-        }
+        check_buf_len(buf, 9)?;
 
         let nonce = vec_to_nonce_unsafe(buf, 1);
         let hazel_version = buf[4];
-        let client_version = (buf[5] as i32) << 24 | (buf[6] as i32) << 16 | (buf[7] as i32) << 8 | buf[8] as i32;
+        let client_version = i32::from_le_bytes([buf[5], buf[6], buf[7], buf[8]]);
         let username = match vec_to_string(buf, 9) {
-            Ok(v ) => v,
+            Ok(v) => v,
             Err(err) => return Err(err),
         };
 
-        Ok(HelloPacket{nonce, hazel_version, client_version, username})
+        Ok(HelloPacket {
+            nonce,
+            hazel_version,
+            client_version,
+            username,
+        })
     }
 }
 
@@ -96,16 +96,22 @@ pub struct AckPacket {
 impl AckPacket {
     pub fn encode(nonce: u16, missing_packets: u8) -> Vec<u8> {
         let (n1, n2) = nonce_to_bytes(nonce);
-        vec![
-            PacketType::ACK as u8,
-            n1, n2,
-            missing_packets,
-        ]
+        vec![PacketType::ACK as u8, n1, n2, missing_packets]
     }
 }
 
 pub struct PingPacket {
     pub nonce: u16,
+}
+
+impl PingPacket {
+    fn parse(buf: &Vec<u8>) -> Result<PingPacket, Box<dyn Error>> {
+        check_buf_len(buf, 2)?;
+
+        let nonce = vec_to_nonce_unsafe(buf, 1);
+
+        Ok(PingPacket { nonce })
+    }
 }
 
 pub fn parse_packet(buf: &Vec<u8>) -> Result<(PacketType, Box<dyn Any>), Box<dyn Error>> {
@@ -122,37 +128,16 @@ pub fn parse_packet(buf: &Vec<u8>) -> Result<(PacketType, Box<dyn Any>), Box<dyn
         PacketType::RELIABLE => match ReliablePacket::parse(buf) {
             Ok(v) => Ok((typ, Box::new(v))),
             Err(err) => Err(err),
-        }
-        _ => Err(format!("unsupported packet type: {:#?}", typ).into())
+        },
+        PacketType::PING => match PingPacket::parse(buf) {
+            Ok(v) => Ok((typ, Box::new(v))),
+            Err(err) => Err(err),
+        },
+        _ => Err(format!("unsupported packet type: {:#?}", typ).into()),
     }
 }
 
-fn vec_to_nonce_unsafe(buf: &Vec<u8>, offset: usize) -> u16 {
-    println!("nonce: {} {}", buf[0], buf[1]);
-    ((buf[offset] as u16) << 8) | buf[offset + 1] as u16
-}
-
-fn nonce_to_bytes(nonce: u16) -> (u8, u8) {
-    ((nonce >> 8) as u8, nonce as u8)
-}
-
-fn vec_to_string(buf: &Vec<u8>, offset: usize) -> Result<String, Box<dyn Error>> {
-    if buf.len() < offset + 1 {
-        return Err("null string len".into());
-    }
-
-    let len = buf[offset] as usize;
-    if buf.len() < offset + len + 1 {
-        return Err("string buffer too short".into());
-    }
-
-    let mut res = String::new();
-    for i in offset + 1 ..= offset + len {
-        res.push(buf[i] as char);
-    }
-
-    Ok(res)
-}
+// ----------------------------------------------------------------------------------
 
 fn read_hazel_messages_until_end(buf: &Vec<u8>, offset: usize) -> Vec<Message> {
     let mut messages: Vec<Message> = vec![];
@@ -163,7 +148,7 @@ fn read_hazel_messages_until_end(buf: &Vec<u8>, offset: usize) -> Vec<Message> {
             Some((c, msg)) => {
                 messages.push(msg);
                 offset += c;
-            },
+            }
             None => break,
         };
     }
