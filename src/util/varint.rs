@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub fn read_varint(buf: &Vec<u8>, offset: usize) -> u64 {
     let mut res = 0u64;
 
@@ -20,6 +21,7 @@ pub fn read_varint(buf: &Vec<u8>, offset: usize) -> u64 {
     res
 }
 
+#[allow(dead_code)]
 pub fn varint_to_vec(v: u64) -> Vec<u8> {
     let mut v = v;
     let mut res: Vec<u8> = vec![];

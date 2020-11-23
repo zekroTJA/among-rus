@@ -7,6 +7,7 @@ use std::{
     error::Error,
 };
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum PacketType {
     NORMAL = 0x00,
@@ -35,6 +36,11 @@ impl TryFrom<u8> for PacketType {
     }
 }
 
+pub trait EncodablePacket {
+    fn encode(&self) -> Vec<u8>;
+}
+
+#[allow(dead_code)]
 pub struct NormalPacket {
     pub payload: Vec<Message>,
 }
@@ -109,10 +115,10 @@ pub struct AckPacket {
     pub missing_packets: u8,
 }
 
-impl AckPacket {
-    pub fn encode(nonce: u16, missing_packets: u8) -> Vec<u8> {
-        let (n1, n2) = nonce_to_bytes(nonce);
-        vec![PacketType::ACK as u8, n1, n2, missing_packets]
+impl EncodablePacket for AckPacket {
+    fn encode(&self) -> Vec<u8> {
+        let (n1, n2) = nonce_to_bytes(self.nonce);
+        vec![PacketType::ACK as u8, n1, n2, self.missing_packets]
     }
 }
 
@@ -146,6 +152,10 @@ pub fn parse_packet(buf: &Vec<u8>) -> Result<(PacketType, Box<dyn Any>), Box<dyn
             Err(err) => Err(err),
         },
         PacketType::PING => match PingPacket::parse(buf) {
+            Ok(v) => Ok((typ, Box::new(v))),
+            Err(err) => Err(err),
+        },
+        PacketType::DISCONNECT => match DisconnectPacket::parse(buf) {
             Ok(v) => Ok((typ, Box::new(v))),
             Err(err) => Err(err),
         },
