@@ -2,7 +2,7 @@
 
 > **Attention**  
 > This is **not** a finished product at all. I've published the project to show my progress on the implementation and for *(maybe)* collecting some useful feedback and improvement suggestions, so I get better into Rust.  
-> If you are looking for a working implementation of the Among Us server, take a look into the [Inpostor](https://github.com/Impostor/Impostor) project.
+> If you are looking for a working implementation of the Among Us server, take a look into the [Impostor](https://github.com/Impostor/Impostor) project.
 
 `among-rus` *(stylized `Among (R)Us`)* is a little side project of mine to get deeper into the Rust language and eco system. The goal of the project is to re-implement a server application for the game [Among Us](https://innersloth.com/gameAmongUs.php) by [InnerSloth](https://innersloth.com).
 
@@ -19,4 +19,4 @@ To set your local server as server in Among Us, you can use the Client tool of I
 ---
 
 © 2020 Ringo Hoffmann (zekro Development)  
-Coverd by the [MIT License](LICENCE).
+Covered by the [MIT License](LICENCE).
