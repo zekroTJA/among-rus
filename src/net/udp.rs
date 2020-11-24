@@ -1,5 +1,4 @@
 use super::packets::*;
-use crate::bufpool::BufPool;
 use crate::objects;
 
 use async_std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
@@ -14,7 +13,7 @@ pub struct Client {}
 /// to the clients.
 pub struct Server {
     socket: UdpSocket,
-    buf_pool: BufPool<u8>,
+    buf: Vec<u8>,
 
     connected_clients: HashMap<String, Client>,
 }
@@ -31,7 +30,7 @@ impl Server {
 
         Ok(Server {
             socket,
-            buf_pool: BufPool::new(1024 * 16),
+            buf: vec![0u8; 1024 * 16],
             connected_clients: HashMap::new(),
         })
     }
@@ -45,22 +44,21 @@ impl Server {
         }
     }
 
-    async fn handle_message(&mut self) -> io::Result<()> {
-        let mut buf = self.buf_pool.take().await;
-        let (_, peer) = self.socket.recv_from(&mut buf).await?;
+    async fn handle_message(&mut self) -> Result<(), Box<dyn Error>> {
+        let (_, peer) = self.socket.recv_from(&mut self.buf).await?;
 
-        match parse_packet(&mut buf) {
-            Ok((typ, packet)) => {
+        match parse_packet_type(&mut self.buf) {
+            Ok(typ) => {
                 println!("{:#?}", typ);
 
                 match typ {
                     PacketType::HELLO => {
-                        let packet = packet.downcast::<HelloPacket>().unwrap();
+                        let packet = HelloPacket::parse(&mut self.buf)?;
                         self.send_ack(&peer, packet.nonce, 128).await?;
                         self.connected_clients.insert(peer.to_string(), Client {});
                     }
                     PacketType::RELIABLE => {
-                        let packet = packet.downcast::<ReliablePacket>().unwrap();
+                        let packet = ReliablePacket::parse(&mut self.buf)?;
                         self.send_ack(&peer, packet.nonce, 128).await?;
                         match Self::parse_object(&packet) {
                             Ok(_) => (),
@@ -68,7 +66,7 @@ impl Server {
                         }
                     }
                     PacketType::PING => {
-                        let packet = packet.downcast::<PingPacket>().unwrap();
+                        let packet = PingPacket::parse(&mut self.buf)?;
                         self.send_ack(&peer, packet.nonce, 128).await?;
                     }
                     PacketType::DISCONNECT => {
@@ -79,8 +77,6 @@ impl Server {
             }
             Err(err) => println!("{}", err.to_string()),
         };
-
-        self.buf_pool.back(buf).await;
 
         Ok(())
     }

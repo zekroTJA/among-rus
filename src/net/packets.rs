@@ -40,6 +40,10 @@ pub trait EncodablePacket {
     fn encode(&self) -> Vec<u8>;
 }
 
+pub trait DecodablePacket: Sized {
+    fn parse(buf: &Vec<u8>) -> Result<Self, Box<dyn Error>>;
+}
+
 #[allow(dead_code)]
 pub struct NormalPacket {
     pub payload: Vec<Message>,
@@ -50,7 +54,7 @@ pub struct ReliablePacket {
     pub payload: Vec<Message>,
 }
 
-impl ReliablePacket {
+impl DecodablePacket for ReliablePacket {
     fn parse(buf: &Vec<u8>) -> Result<ReliablePacket, Box<dyn Error>> {
         check_buf_len(buf, 5)?;
 
@@ -68,7 +72,7 @@ pub struct HelloPacket {
     pub username: String,
 }
 
-impl HelloPacket {
+impl DecodablePacket for HelloPacket {
     fn parse(buf: &Vec<u8>) -> Result<HelloPacket, Box<dyn Error>> {
         check_buf_len(buf, 9)?;
 
@@ -126,7 +130,7 @@ pub struct PingPacket {
     pub nonce: u16,
 }
 
-impl PingPacket {
+impl DecodablePacket for PingPacket {
     fn parse(buf: &Vec<u8>) -> Result<PingPacket, Box<dyn Error>> {
         check_buf_len(buf, 2)?;
 
@@ -136,31 +140,13 @@ impl PingPacket {
     }
 }
 
-pub fn parse_packet(buf: &Vec<u8>) -> Result<(PacketType, Box<dyn Any>), Box<dyn Error>> {
+pub fn parse_packet_type(buf: &Vec<u8>) -> Result<PacketType, Box<dyn Error>> {
     let typ: PacketType = match buf[0].try_into() {
         Ok(v) => v,
         Err(_) => return Err("invalid packet type".into()),
     };
 
-    match typ {
-        PacketType::HELLO => match HelloPacket::parse(buf) {
-            Ok(v) => Ok((typ, Box::new(v))),
-            Err(err) => Err(err),
-        },
-        PacketType::RELIABLE => match ReliablePacket::parse(buf) {
-            Ok(v) => Ok((typ, Box::new(v))),
-            Err(err) => Err(err),
-        },
-        PacketType::PING => match PingPacket::parse(buf) {
-            Ok(v) => Ok((typ, Box::new(v))),
-            Err(err) => Err(err),
-        },
-        PacketType::DISCONNECT => match DisconnectPacket::parse(buf) {
-            Ok(v) => Ok((typ, Box::new(v))),
-            Err(err) => Err(err),
-        },
-        _ => Err(format!("unsupported packet type: {:#?}", typ).into()),
-    }
+    Ok(typ)
 }
 
 // ----------------------------------------------------------------------------------
